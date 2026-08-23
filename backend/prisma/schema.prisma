@@ -1,0 +1,233 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String          @id @default(uuid())
+  name            String
+  email           String          @unique
+  passwordHash    String
+  role            Role
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  bookings        Booking[]
+  organisedEvents Event[]         @relation("EventOrganiser")
+  organisedVenues Venue[]         @relation("VenueOrganiser")
+  waitlistEntries WaitlistEntry[]
+
+  @@map("users")
+}
+
+model Venue {
+  id          String   @id @default(uuid())
+  name        String
+  address     String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  organiserId String
+  seats       Seat[]
+  shows       Show[]
+  organiser   User     @relation("VenueOrganiser", fields: [organiserId], references: [id])
+
+  @@index([organiserId])
+  @@map("venues")
+}
+
+model Seat {
+  id         String       @id @default(uuid())
+  venueId    String
+  rowLabel   String
+  seatNumber Int
+  category   SeatCategory
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+  venue      Venue        @relation(fields: [venueId], references: [id])
+  showSeats  ShowSeat[]
+
+  @@unique([venueId, rowLabel, seatNumber])
+  @@map("seats")
+}
+
+model Event {
+  id          String    @id @default(uuid())
+  title       String
+  description String
+  type        EventType
+  organiserId String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  organiser   User      @relation("EventOrganiser", fields: [organiserId], references: [id])
+  shows       Show[]
+
+  @@map("events")
+}
+
+model Show {
+  id              String          @id @default(uuid())
+  eventId         String
+  venueId         String
+  startTime       DateTime
+  endTime         DateTime
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  bookings        Booking[]
+  showPrices      ShowPrice[]
+  showSeats       ShowSeat[]
+  event           Event           @relation(fields: [eventId], references: [id])
+  venue           Venue           @relation(fields: [venueId], references: [id])
+  waitlistEntries WaitlistEntry[]
+
+  @@index([eventId])
+  @@index([venueId])
+  @@index([startTime])
+  @@map("shows")
+}
+
+model ShowPrice {
+  id        String       @id @default(uuid())
+  showId    String
+  category  SeatCategory
+  price     Decimal      @db.Decimal(10, 2)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  show      Show         @relation(fields: [showId], references: [id])
+
+  @@unique([showId, category])
+  @@map("show_prices")
+}
+
+model ShowSeat {
+  id             String          @id @default(uuid())
+  showId         String
+  seatId         String
+  status         ShowSeatStatus  @default(AVAILABLE)
+  heldBy         String?
+  holdToken      String?
+  holdExpiresAt  DateTime?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  bookingSeats   BookingSeat[]
+  seat           Seat            @relation(fields: [seatId], references: [id])
+  show           Show            @relation(fields: [showId], references: [id])
+  waitlistOffers WaitlistOffer[]
+
+  @@unique([showId, seatId])
+  @@index([showId, status])
+  @@index([showId, holdExpiresAt])
+  @@map("show_seats")
+}
+
+model Booking {
+  id               String        @id @default(uuid())
+  bookingReference String        @unique
+  userId           String
+  showId           String
+  status           BookingStatus
+  totalAmount      Decimal       @db.Decimal(10, 2)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  bookingSeats     BookingSeat[]
+  show             Show          @relation(fields: [showId], references: [id])
+  user             User          @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([showId])
+  @@map("bookings")
+}
+
+model BookingSeat {
+  id         String   @id @default(uuid())
+  bookingId  String
+  showSeatId String
+  price      Decimal  @db.Decimal(10, 2)
+  createdAt  DateTime @default(now())
+  booking    Booking  @relation(fields: [bookingId], references: [id])
+  showSeat   ShowSeat @relation(fields: [showSeatId], references: [id])
+
+  @@unique([bookingId, showSeatId])
+  @@map("booking_seats")
+}
+
+model WaitlistEntry {
+  id             String          @id @default(uuid())
+  userId         String
+  showId         String
+  category       SeatCategory
+  position       Int
+  status         WaitlistStatus  @default(WAITING)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  show           Show            @relation(fields: [showId], references: [id])
+  user           User            @relation(fields: [userId], references: [id])
+  waitlistOffers WaitlistOffer[]
+
+  @@index([showId])
+  @@index([category])
+  @@index([status])
+  @@index([position])
+  @@map("waitlist_entries")
+}
+
+model WaitlistOffer {
+  id              String        @id @default(uuid())
+  waitlistEntryId String
+  showSeatId      String
+  expiresAt       DateTime
+  status          OfferStatus   @default(PENDING)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  showSeat        ShowSeat      @relation(fields: [showSeatId], references: [id])
+  waitlistEntry   WaitlistEntry @relation(fields: [waitlistEntryId], references: [id])
+
+  @@index([waitlistEntryId, status])
+  @@index([showSeatId, status])
+  @@index([expiresAt])
+  @@map("waitlist_offers")
+}
+
+enum Role {
+  CUSTOMER
+  ORGANISER
+  ADMIN
+}
+
+enum SeatCategory {
+  STANDARD
+  PREMIUM
+}
+
+enum EventType {
+  MOVIE
+  CONCERT
+}
+
+enum ShowSeatStatus {
+  AVAILABLE
+  HELD
+  BOOKED
+}
+
+enum BookingStatus {
+  CONFIRMED
+  CANCELLED
+}
+
+enum WaitlistStatus {
+  WAITING
+  OFFERED
+  FULFILLED
+  EXPIRED
+  CANCELLED
+}
+
+enum OfferStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  CANCELLED
+}
