@@ -145,3 +145,52 @@ export interface ApiResponse<T> {
   message: string
   data: T
 }
+
+export interface AdminOverviewStats {
+  users: {
+    total: number
+    customers: number
+    organisers: number
+    admins: number
+  }
+  inventory: {
+    totalEvents: number
+    totalVenues: number
+    totalShows: number
+  }
+  bookings: {
+    total: number
+    confirmed: number
+    cancelled: number
+    totalRevenue: string
+  }
+  waitlist: {
+    activeWaiting: number
+    activeOffered: number
+  }
+}
+
+export interface AdminUserItem {
+  id: string
+  name: string
+  email: string
+  role: Role
+  createdAt: string
+}
+
+export interface AdminBookingItem {
+  id: string
+  bookingReference: string
+  userId: string
+  userEmail: string
+  userName: string
+  showId: string
+  eventTitle: string
+  venueName: string
+  showStartTime: string
+  status: BookingStatus
+  totalAmount: string
+  seatCount: number
+  createdAt: string
+}
+

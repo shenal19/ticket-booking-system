@@ -56,3 +56,24 @@ export async function listMyBookings(req: Request, res: Response, next: NextFunc
     return handleAppError(err, res, next)
   }
 }
+
+/**
+ * Cancel a booking. userId always comes from
+ * req.user.userId (set by authenticate) — never the request body.
+ */
+export async function cancelBooking(req: Request, res: Response, next: NextFunction) {
+  try {
+    const userId = req.user!.userId
+    const bookingId = req.params.bookingId as string
+    const booking = await bookingService.cancelBooking(userId, bookingId)
+
+    return res.status(200).json({
+      success: true,
+      message: 'Booking cancelled successfully',
+      data: booking,
+    })
+  } catch (err) {
+    return handleAppError(err, res, next)
+  }
+}
+

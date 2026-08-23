@@ -1,4 +1,6 @@
 import http from 'http'
+import bcrypt from 'bcryptjs'
+import { Role } from '@prisma/client'
 import app from '../src/app'
 import { prisma } from '../src/lib/prisma'
 
@@ -528,6 +530,155 @@ async function main() {
     const fulfilledWaitlistRes = await request('/waitlist/mine', { token: customer2Token })
     const entryFulfilled = fulfilledWaitlistRes.body.data.find((e: any) => e.id === waitlistEntryId)
     assert(entryFulfilled.status === 'FULFILLED', 'Waitlist entry is marked FULFILLED')
+  })
+
+  // ========================================================
+  // 6. BOOKING CANCELLATION & WAITLIST AUTO-PROMOTION FLOW
+  // ========================================================
+  await runTest('Customer Booking Cancellation & Waitlist Promotion Flow', async () => {
+    // Customer 2 joins waitlist for STANDARD category on showId (seats A1 and A2 are currently BOOKED by Customer 1)
+    const joinWaitlistStandard = await request('/waitlist', {
+      method: 'POST',
+      token: customer2Token,
+      body: {
+        showId,
+        category: 'STANDARD',
+      },
+    })
+    assert(joinWaitlistStandard.status === 201, 'Customer 2 joined waitlist for STANDARD category (201)')
+    const standardWaitlistId = joinWaitlistStandard.body.data.id
+
+    // Security: Unauthenticated request to cancel -> 401
+    const unauthCancel = await request(`/bookings/${bookingId}/cancel`, {
+      method: 'PATCH',
+    })
+    assert(unauthCancel.status === 401, 'Unauthenticated cancel request blocked with 401')
+
+    // Security: Organiser attempt to cancel customer booking -> 403
+    const orgCancel = await request(`/bookings/${bookingId}/cancel`, {
+      method: 'PATCH',
+      token: organiserAToken,
+    })
+    assert(orgCancel.status === 403, 'Organiser cannot cancel customer booking (403 Forbidden)')
+
+    // Security: Customer 2 attempts to cancel Customer 1's booking -> 404
+    const crossCancel = await request(`/bookings/${bookingId}/cancel`, {
+      method: 'PATCH',
+      token: customer2Token,
+    })
+    assert(crossCancel.status === 404, 'Customer 2 cannot cancel Customer 1 booking (404 Not Found)')
+
+    // Customer 1 cancels their own confirmed booking
+    const cancelRes = await request(`/bookings/${bookingId}/cancel`, {
+      method: 'PATCH',
+      token: customer1Token,
+    })
+    assert(cancelRes.status === 200, 'Customer 1 successfully cancelled booking (200)')
+    assert(cancelRes.body.data.status === 'CANCELLED', 'Booking status transitioned to CANCELLED')
+
+    // Prevent double cancellation -> 409
+    const doubleCancelRes = await request(`/bookings/${bookingId}/cancel`, {
+      method: 'PATCH',
+      token: customer1Token,
+    })
+    assert(doubleCancelRes.status === 409, 'Double-cancellation rejected with 409 Conflict')
+
+    // Verify seats were released back and Customer 2 was automatically promoted!
+    const customer2Waitlist = await request('/waitlist/mine', { token: customer2Token })
+    const promotedEntry = customer2Waitlist.body.data.find((e: any) => e.id === standardWaitlistId)
+    assert(promotedEntry.status === 'OFFERED', 'Waitlisted Customer 2 automatically promoted to OFFERED on seat cancellation')
+    assert(Boolean(promotedEntry.offer), 'Hold offer generated for promoted waitlist customer')
+
+    // Customer 2 confirms booking for the newly freed and offered seat
+    const bookFreedSeatRes = await request('/bookings', {
+      method: 'POST',
+      token: customer2Token,
+      body: {
+        showId,
+        showSeatIds: [promotedEntry.offer.showSeatId],
+        holdToken: promotedEntry.offer.holdToken,
+      },
+    })
+    assert(bookFreedSeatRes.status === 201, 'Customer 2 successfully booked freed seat from cancellation offer (201)')
+  })
+
+  // ========================================================
+  // 7. ADMIN ROLE & SYSTEM-WIDE AUDIT CAPABILITIES
+  // ========================================================
+  await runTest('Admin Role Capabilities & Authorization Guards', async () => {
+    let adminToken = ''
+    const adminEmail = `admin_${randomSuffix}@test.com`
+
+    // Security: Attempt to self-register as ADMIN via public registration must be rejected -> 400
+    const regAdminRes = await request('/auth/register', {
+      method: 'POST',
+      body: {
+        name: 'Malicious Admin Attempt',
+        email: adminEmail,
+        password: 'Password123!',
+        role: 'ADMIN',
+      },
+    })
+    assert(regAdminRes.status === 400, 'Direct self-registration as ADMIN blocked by validation (400)')
+
+    // Provision Admin directly in database (representing seed / internal provisioning)
+    const salt = await bcrypt.genSalt(10)
+    const passwordHash = await bcrypt.hash('Password123!', salt)
+    await prisma.user.create({
+      data: {
+        name: 'System Admin Master',
+        email: adminEmail,
+        passwordHash,
+        role: Role.ADMIN,
+      },
+    })
+
+    // Login Admin
+    const loginAdminRes = await request('/auth/login', {
+      method: 'POST',
+      body: { email: adminEmail, password: 'Password123!' },
+    })
+    assert(loginAdminRes.status === 200, 'Admin logged in successfully (200)')
+    adminToken = loginAdminRes.body.data.token
+
+    // Unauthenticated access to /admin/overview -> 401
+    const unauthAdmin = await request('/admin/overview')
+    assert(unauthAdmin.status === 401, 'Unauthenticated access to /admin/overview blocked with 401')
+
+    // Customer access to /admin/overview -> 403
+    const custAdmin = await request('/admin/overview', { token: customer1Token })
+    assert(custAdmin.status === 403, 'Customer access to /admin/overview blocked with 403')
+
+    // Organiser access to /admin/overview -> 403
+    const orgAdmin = await request('/admin/overview', { token: organiserAToken })
+    assert(orgAdmin.status === 403, 'Organiser access to /admin/overview blocked with 403')
+
+    // Admin accesses /admin/overview -> 200
+    const adminOverviewRes = await request('/admin/overview', { token: adminToken })
+    assert(adminOverviewRes.status === 200, 'Admin retrieved system overview metrics (200)')
+    assert(adminOverviewRes.body.data.users.total >= 4, 'System metrics report correct user count')
+    assert(adminOverviewRes.body.data.inventory.totalEvents >= 1, 'System metrics report events')
+    assert(adminOverviewRes.body.data.bookings.total >= 2, 'System metrics report bookings')
+
+    // Admin accesses /admin/users -> 200
+    const adminUsersRes = await request('/admin/users', { token: adminToken })
+    assert(adminUsersRes.status === 200, 'Admin retrieved system user directory (200)')
+    assert(adminUsersRes.body.data.length >= 4, 'Users list is populated')
+    assert(!('passwordHash' in adminUsersRes.body.data[0]), 'Password hashes omitted from user directory')
+
+    // Admin accesses /admin/bookings -> 200
+    const adminBookingsRes = await request('/admin/bookings', { token: adminToken })
+    assert(adminBookingsRes.status === 200, 'Admin retrieved system-wide bookings (200)')
+    assert(adminBookingsRes.body.data.length >= 2, 'System bookings list contains global records')
+  })
+
+  // ========================================================
+  // 8. UNPROTECTED HEALTH CHECK ENDPOINT
+  // ========================================================
+  await runTest('System Health Check Liveness', async () => {
+    const healthRes = await request('/health')
+    assert(healthRes.status === 200, 'GET /api/health returns 200 OK without authentication')
+    assert(healthRes.body.success === true, 'Health check payload is valid')
   })
 
   // Close Server and Prisma Connection

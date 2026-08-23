@@ -53,7 +53,28 @@ export async function seedDatabase() {
     console.log(`ℹ Demo Customer exists: ${customerEmail}`)
   }
 
-  // 3. Demo Venue
+  // 3. Demo Admin
+  const adminEmail = 'admin@ticketbooking.com'
+  let admin = await prisma.user.findUnique({
+    where: { email: adminEmail },
+  })
+
+  if (!admin) {
+    const passwordHash = await hashPassword('Password123!')
+    admin = await prisma.user.create({
+      data: {
+        name: 'System Administrator',
+        email: adminEmail,
+        passwordHash,
+        role: Role.ADMIN,
+      },
+    })
+    console.log(`✓ Created demo Admin: ${adminEmail}`)
+  } else {
+    console.log(`ℹ Demo Admin exists: ${adminEmail}`)
+  }
+
+  // 4. Demo Venue
   let venue = await prisma.venue.findFirst({
     where: {
       name: 'Grand IMAX Arena',

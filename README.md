@@ -187,11 +187,20 @@ For popular events, seats often become available due to checkout abandonment or 
 ### Bookings (`/api/bookings`)
 - `POST /` — Complete ticket booking (`{ showId, showSeatIds, holdToken }`).
 - `GET /mine` — Retrieve authenticated customer's booking history.
+- `PATCH /:bookingId/cancel` — Cancel confirmed booking, release seats, and trigger waitlist promotion.
 
 ### Waitlist (`/api/waitlist`)
 - `POST /` — Join waitlist (`{ showId, category }`).
 - `GET /mine` — List customer's waitlist entries and active offers.
 - `DELETE /:waitlistEntryId` — Cancel waitlist entry.
+
+### Admin Management (`/api/admin` - Requires `ADMIN` Role)
+- `GET /overview` — Platform metrics, user distribution, inventory, revenue, and active waitlist count.
+- `GET /users` — System user directory with role breakdown.
+- `GET /bookings` — Global audit list of all platform bookings.
+
+### System Health
+- `GET /api/health` — Unauthenticated liveness check.
 
 ### Organiser Management (`/api`)
 - `GET /events`, `POST /events`, `PUT /events/:id`, `DELETE /events/:id` — Manage events.
@@ -254,7 +263,7 @@ cd backend
 # Generate Prisma Client
 npm run prisma:generate
 
-# Seed initial demo data (Organiser, Customer, Venues, Seats, Shows, Prices)
+# Seed initial demo data (Organiser, Customer, Admin, Venues, Seats, Shows, Prices)
 npm run seed
 ```
 
@@ -263,7 +272,7 @@ npm run seed
 ## Automated Testing & Build Commands
 
 ### Run Integration Test Suite
-Executes 57 end-to-end automated tests covering authentication, RBAC authorization, cross-organiser ownership isolation, seat holds, concurrency race conditions, bookings, and waitlist auto-promotion:
+Executes **83 end-to-end automated tests** covering authentication, RBAC authorization, cross-organiser ownership isolation, seat holds, concurrency race conditions, bookings, booking cancellation with seat release, waitlist auto-promotion, and Admin operations:
 
 ```bash
 cd backend
@@ -298,7 +307,7 @@ Both builds compile with **0 TypeScript errors**.
    cd frontend
    npm run dev
    ```
-3. **Test Customer Booking Flow**:
+3. **Test Customer Booking & Cancellation Flow**:
    - Navigate to `http://localhost:5173`.
    - Login as Customer:
      - **Email**: `customer@ticketbooking.com`
@@ -309,15 +318,33 @@ Both builds compile with **0 TypeScript errors**.
    - Watch the live countdown timer activate.
    - Click **Confirm & Book Tickets** to generate a confirmed booking reference and view the ticket summary.
    - Click **My Bookings** to review the reservation.
+   - Click **Cancel Booking**, review the confirmation prompt, and confirm cancellation to release seats.
 4. **Test Organiser Management Portal**:
    - Logout and login as Organiser:
      - **Email**: `organiser@ticketbooking.com`
      - **Password**: `Password123!`
    - View overview metrics, create new venues, configure seats, schedule shows, and manage pricing.
+5. **Test Admin Console**:
+   - Logout and login as Admin:
+     - **Email**: `admin@ticketbooking.com`
+     - **Password**: `Password123!`
+   - Open **Admin Console** to view global platform KPIs, user directory, and platform bookings.
+
+---
+
+## Submission
+
+- **Repository**: https://github.com/shenal19/ticket-booking-system
+- **System Design**: [docs/system-design.md](docs/system-design.md)
+- **Deployment Guide**: [docs/deployment.md](docs/deployment.md)
+- **Final Audit Matrix**: [docs/final-audit.md](docs/final-audit.md)
+- **Live Application**: `<PLACEHOLDER UNTIL DEPLOYED>`
+- **Backend API**: `<PLACEHOLDER UNTIL DEPLOYED>`
 
 ---
 
 ## License
 
 This project is developed for professional evaluation and demonstration.
+
 

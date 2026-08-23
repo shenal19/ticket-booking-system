@@ -7,6 +7,7 @@ import showRoutes from './show.routes'
 import showSeatRoutes from './show-seat.routes'
 import bookingRoutes from './booking.routes'
 import waitlistRoutes from './waitlist.routes'
+import adminRoutes from './admin.routes'
 
 const router = Router()
 
@@ -18,8 +19,6 @@ router.use('/shows', showRoutes)
 router.use('/show-seats', showSeatRoutes)
 router.use('/bookings', bookingRoutes)
 router.use('/waitlist', waitlistRoutes)
-
-// Future phases will mount additional routers here, e.g.:
-// router.use('/qr', qrRoutes)
+router.use('/admin', adminRoutes)
 
 export default router

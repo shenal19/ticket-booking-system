@@ -9,6 +9,9 @@ import type {
   ShowPriceItem,
   SeatCategory,
   EventType,
+  AdminOverviewStats,
+  AdminUserItem,
+  AdminBookingItem,
 } from '../types'
 
 interface OrganiserDashboardProps {
@@ -71,6 +74,21 @@ function OrganiserDashboard({ initialTab = 'overview' }: OrganiserDashboardProps
   const [seatCategory, setSeatCategory] = useState<SeatCategory>('STANDARD')
   const [editingSeatId, setEditingSeatId] = useState<string | null>(null)
 
+  // 6. Admin System State
+  const [adminStats, setAdminStats] = useState<AdminOverviewStats | null>(null)
+  const [adminUsers, setAdminUsers] = useState<AdminUserItem[]>([])
+  const [adminBookings, setAdminBookings] = useState<AdminBookingItem[]>([])
+  const [adminLoading, setAdminLoading] = useState(false)
+
+  const isUserAdmin = (() => {
+    try {
+      const raw = localStorage.getItem('user')
+      return raw ? JSON.parse(raw).role === 'ADMIN' : false
+    } catch {
+      return false
+    }
+  })()
+
   useEffect(() => {
     setActiveTab(initialTab)
   }, [initialTab])
@@ -96,8 +114,31 @@ function OrganiserDashboard({ initialTab = 'overview' }: OrganiserDashboardProps
     }
   }
 
+  // Load admin data
+  async function loadAdminData() {
+    if (!isUserAdmin) return
+    setAdminLoading(true)
+    try {
+      const [resStats, resUsers, resBookings] = await Promise.all([
+        apiRequest<ApiResponse<AdminOverviewStats>>('/admin/overview'),
+        apiRequest<ApiResponse<AdminUserItem[]>>('/admin/users'),
+        apiRequest<ApiResponse<AdminBookingItem[]>>('/admin/bookings'),
+      ])
+      setAdminStats(resStats.data || null)
+      setAdminUsers(resUsers.data || [])
+      setAdminBookings(resBookings.data || [])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load admin metrics')
+    } finally {
+      setAdminLoading(false)
+    }
+  }
+
   useEffect(() => {
     loadAllData()
+    if (isUserAdmin) {
+      loadAdminData()
+    }
   }, [])
 
   function showSuccess(msg: string) {
@@ -465,6 +506,18 @@ function OrganiserDashboard({ initialTab = 'overview' }: OrganiserDashboardProps
           >
             🏛️ Venues ({venues.length})
           </button>
+          {isUserAdmin && (
+            <button
+              type="button"
+              className={`dash-tab-btn ${activeTab === 'admin' ? 'active' : ''}`}
+              onClick={() => {
+                setActiveTab('admin')
+                loadAdminData()
+              }}
+            >
+              👑 Admin Console
+            </button>
+          )}
         </div>
       </div>
 
@@ -850,6 +903,148 @@ function OrganiserDashboard({ initialTab = 'overview' }: OrganiserDashboardProps
               </table>
             </div>
           )}
+        </section>
+      )}
+
+      {/* ADMIN CONSOLE TAB */}
+      {isUserAdmin && activeTab === 'admin' && (
+        <section className="dashboard-tab-content">
+          <div className="tab-title-row">
+            <div>
+              <h2>👑 System Administration Console</h2>
+              <p style={{ color: '#94a3b8', margin: '4px 0 0', fontSize: '14px' }}>
+                Platform-wide metrics, active user directory, and global reservation audits.
+              </p>
+            </div>
+            <button
+              type="button"
+              className="secondary-btn"
+              onClick={loadAdminData}
+              disabled={adminLoading}
+            >
+              {adminLoading ? 'Refreshing...' : '🔄 Refresh Admin Data'}
+            </button>
+          </div>
+
+          {adminStats && (
+            <div className="stats-grid">
+              <div className="stat-card">
+                <span className="stat-label">Platform Users</span>
+                <span className="stat-number">{adminStats.users.total}</span>
+                <div className="small-meta">
+                  {adminStats.users.customers} Customers · {adminStats.users.organisers} Organisers · {adminStats.users.admins} Admins
+                </div>
+              </div>
+
+              <div className="stat-card">
+                <span className="stat-label">Confirmed Revenue</span>
+                <span className="stat-number" style={{ color: '#34d399' }}>
+                  ${Number(adminStats.bookings.totalRevenue).toFixed(2)}
+                </span>
+                <div className="small-meta">
+                  {adminStats.bookings.confirmed} Confirmed · {adminStats.bookings.cancelled} Cancelled
+                </div>
+              </div>
+
+              <div className="stat-card">
+                <span className="stat-label">Global Catalog</span>
+                <span className="stat-number">{adminStats.inventory.totalEvents} Events</span>
+                <div className="small-meta">
+                  {adminStats.inventory.totalShows} Shows across {adminStats.inventory.totalVenues} Venues
+                </div>
+              </div>
+
+              <div className="stat-card">
+                <span className="stat-label">Active Waitlist</span>
+                <span className="stat-number" style={{ color: '#38bdf8' }}>
+                  {adminStats.waitlist.activeWaiting + adminStats.waitlist.activeOffered}
+                </span>
+                <div className="small-meta">
+                  {adminStats.waitlist.activeWaiting} Waiting · {adminStats.waitlist.activeOffered} Active Offers
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Registered Users Table */}
+          <div style={{ marginTop: '32px' }}>
+            <h3 style={{ margin: '0 0 16px', fontSize: '18px' }}>Registered Platform Users</h3>
+            {adminUsers.length === 0 ? (
+              <p className="empty-hint">No registered users found.</p>
+            ) : (
+              <div className="data-table-wrapper">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>User ID</th>
+                      <th>Name</th>
+                      <th>Email</th>
+                      <th>Role</th>
+                      <th>Joined</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {adminUsers.map((u) => (
+                      <tr key={u.id}>
+                        <td style={{ fontFamily: 'monospace', fontSize: '12px' }}>{u.id.slice(0, 8)}...</td>
+                        <td><strong>{u.name}</strong></td>
+                        <td>{u.email}</td>
+                        <td><span className="badge-tag">{u.role}</span></td>
+                        <td>{formatDate(u.createdAt)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* Global Bookings Table */}
+          <div style={{ marginTop: '36px' }}>
+            <h3 style={{ margin: '0 0 16px', fontSize: '18px' }}>Recent System Bookings</h3>
+            {adminBookings.length === 0 ? (
+              <p className="empty-hint">No bookings placed yet on the platform.</p>
+            ) : (
+              <div className="data-table-wrapper">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Reference</th>
+                      <th>Customer</th>
+                      <th>Event & Venue</th>
+                      <th>Seats</th>
+                      <th>Total</th>
+                      <th>Status</th>
+                      <th>Date</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {adminBookings.map((b) => (
+                      <tr key={b.id}>
+                        <td><strong style={{ color: '#818cf8', fontFamily: 'monospace' }}>{b.bookingReference}</strong></td>
+                        <td>
+                          <div>{b.userName}</div>
+                          <div className="small-meta">{b.userEmail}</div>
+                        </td>
+                        <td>
+                          <div>{b.eventTitle}</div>
+                          <div className="small-meta">🏛️ {b.venueName}</div>
+                        </td>
+                        <td>{b.seatCount} seats</td>
+                        <td><strong>${Number(b.totalAmount).toFixed(2)}</strong></td>
+                        <td>
+                          <span className={`status-pill ${b.status.toLowerCase() === 'confirmed' ? 'confirmed' : 'cancelled'}`}>
+                            {b.status}
+                          </span>
+                        </td>
+                        <td>{formatDate(b.createdAt)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </section>
       )}
 

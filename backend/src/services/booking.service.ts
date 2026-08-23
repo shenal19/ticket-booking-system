@@ -5,6 +5,7 @@ import { AppError } from '../utils/AppError'
 import { BookingInput } from '../utils/validators'
 import { generateTicketQr } from './qr.service'
 import { sendTicketEmail } from './email.service'
+import { promoteWaitlistIfPossible } from './waitlist.service'
 
 type TransactionClient = Prisma.TransactionClient
 
@@ -605,4 +606,98 @@ export async function listMyBookings(
       price: bs.price.toFixed(2),
     })),
   }))
+}
+
+/**
+ * Cancel a confirmed booking for the authenticated customer.
+ *
+ * Transactionally updates the booking status to CANCELLED, releases
+ * the booked seats back to AVAILABLE, and immediately promotes the
+ * next waiting customer for each affected seat category.
+ */
+export async function cancelBooking(
+  userId: string,
+  bookingId: string
+): Promise<BookingView> {
+  const existingBooking = await prisma.booking.findUnique({
+    where: { id: bookingId },
+    include: {
+      bookingSeats: {
+        include: {
+          showSeat: {
+            include: {
+              seat: true,
+            },
+          },
+        },
+      },
+    },
+  })
+
+  if (!existingBooking) {
+    throw new AppError('Booking not found', 404)
+  }
+
+  if (existingBooking.userId !== userId) {
+    throw new AppError('Booking not found', 404)
+  }
+
+  if (existingBooking.status === 'CANCELLED') {
+    throw new AppError('Booking is already cancelled', 409)
+  }
+
+  return prisma.$transaction(
+    async (tx: TransactionClient): Promise<BookingView> => {
+      const updatedBooking = await tx.booking.update({
+        where: { id: bookingId },
+        data: { status: 'CANCELLED' },
+        include: {
+          bookingSeats: {
+            include: {
+              showSeat: {
+                include: {
+                  seat: true,
+                },
+              },
+            },
+          },
+        },
+      })
+
+      const showSeatIds = existingBooking.bookingSeats.map(
+        (bs) => bs.showSeatId
+      )
+
+      await tx.showSeat.updateMany({
+        where: {
+          id: { in: showSeatIds },
+          showId: existingBooking.showId,
+        },
+        data: {
+          status: 'AVAILABLE',
+          heldBy: null,
+          holdToken: null,
+          holdExpiresAt: null,
+        },
+      })
+
+      const freedCategories = [
+        ...new Set(
+          existingBooking.bookingSeats.map(
+            (bs) => bs.showSeat.seat.category as SeatCategory
+          )
+        ),
+      ]
+
+      for (const category of freedCategories) {
+        await promoteWaitlistIfPossible(
+          tx,
+          existingBooking.showId,
+          category
+        )
+      }
+
+      return toBookingView(updatedBooking)
+    }
+  )
 }
