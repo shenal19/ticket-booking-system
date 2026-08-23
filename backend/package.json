@@ -8,6 +8,7 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "test": "tsx tests/integration.test.ts",
+    "test:live": "node tests/live-production.js",
     "seed": "tsx src/scripts/seed.ts",
     "prisma:generate": "prisma generate"
   },

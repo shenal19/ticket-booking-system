@@ -89,16 +89,26 @@ Trigger deployment. Vercel will build the optimized production bundle.
 
 ---
 
-## 4. Verification & Health Check
+## 4. Verified Live Production Deployments
+
+| Component | Target URL |
+| :--- | :--- |
+| **Vercel Frontend** | [https://frontend-zeta-ten-0drcr2zsfz.vercel.app](https://frontend-zeta-ten-0drcr2zsfz.vercel.app) |
+| **Render Backend** | [https://ticket-booking-backend-l5q1.onrender.com](https://ticket-booking-backend-l5q1.onrender.com) |
+| **Health Check** | [https://ticket-booking-backend-l5q1.onrender.com/api/health](https://ticket-booking-backend-l5q1.onrender.com/api/health) |
+| **Database** | Render Hosted PostgreSQL (`ticket-booking-db`) |
+
+### Verification & Health Check Commands
 
 1. **Verify Backend Liveness**:
    ```bash
-   curl https://your-backend.onrender.com/api/health
+   curl https://ticket-booking-backend-l5q1.onrender.com/api/health
    # Response: {"success":true,"message":"Ticket Booking System API is running"}
    ```
-2. **Verify CORS**:
-   Open browser console on `https://your-app.vercel.app` and confirm network requests to `/api/events/discover` succeed with status 200 without CORS errors.
+2. **Verify Frontend**:
+   Navigate to `https://frontend-zeta-ten-0drcr2zsfz.vercel.app` and sign in with the verified demo credentials below.
 3. **Verify Demo Accounts**:
    - Customer: `customer@ticketbooking.com` / `Password123!`
    - Organiser: `organiser@ticketbooking.com` / `Password123!`
    - Admin: `admin@ticketbooking.com` / `Password123!`
+

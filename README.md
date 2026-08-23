@@ -6,6 +6,23 @@ The system features real-time visual seat selection, atomic seat holding with TT
 
 ---
 
+## 🚀 Live Production Deployment
+
+| Service | Hosting Provider | Live Production URL | Status |
+| :--- | :--- | :--- | :--- |
+| **Frontend Application** | **Vercel** | [https://frontend-zeta-ten-0drcr2zsfz.vercel.app](https://frontend-zeta-ten-0drcr2zsfz.vercel.app) | 🟢 **Live** |
+| **Backend REST API** | **Render** | [https://ticket-booking-backend-l5q1.onrender.com](https://ticket-booking-backend-l5q1.onrender.com) | 🟢 **Live** |
+| **API Health Check** | **Render** | [https://ticket-booking-backend-l5q1.onrender.com/api/health](https://ticket-booking-backend-l5q1.onrender.com/api/health) | 🟢 **200 OK** |
+| **Managed Database** | **Render PostgreSQL** | `ticket-booking-db` (PostgreSQL 16) | 🟢 **Connected** |
+
+### Verified Demo Credentials
+- **Customer**: `customer@ticketbooking.com` / `Password123!`
+- **Organiser**: `organiser@ticketbooking.com` / `Password123!`
+- **Admin**: `admin@ticketbooking.com` / `Password123!`
+
+
+---
+
 ## Table of Contents
 
 1. [Key Features](#key-features)
