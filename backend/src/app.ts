@@ -7,7 +7,14 @@ import routes from './routes'
 const app: Application = express()
 
 // Core middleware
-app.use(cors({ origin: env.frontendUrl }))
+app.use(
+  cors({
+    origin: env.frontendUrl
+      ? [env.frontendUrl, env.frontendUrl.replace(/\/$/, '')]
+      : true,
+    credentials: true,
+  }),
+)
 app.use(express.json())
 
 // API routes

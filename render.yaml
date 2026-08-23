@@ -4,7 +4,7 @@
     env: node
     rootDir: backend
     plan: free
-    buildCommand: npm install && npx prisma generate && npm run build
+    buildCommand: npm install && npx prisma generate && npx prisma migrate deploy && npm run seed && npm run build
     startCommand: npm start
     healthCheckPath: /api/health
     envVars:
